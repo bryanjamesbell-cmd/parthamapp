@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Partham Engineering App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+  <div id="app" class="max-w-4xl mx-auto p-4">
+    <h1 class="text-2xl font-bold mb-4">Partham Engineering</h1>
+    
+    <!-- Auth Section -->
+    <div id="auth" class="mb-4">
+      <input id="email" type="email" placeholder="Email" class="border p-2 mr-2">
+      <input id="password" type="password" placeholder="Password" class="border p-2 mr-2">
+      <button id="login" class="bg-blue-500 text-white p-2 rounded">Login</button>
+      <button id="signup" class="bg-green-500 text-white p-2 rounded">Sign Up</button>
+      <button id="logout" class="bg-red-500 text-white p-2 rounded hidden">Logout</button>
+    </div>
+
+    <!-- Quote Form -->
+    <div id="quote-form" class="mb-4 hidden">
+      <h2 class="text-xl font-semibold">Create Quote</h2>
+      <input id="quote-client" type="text" placeholder="Client (e.g., Town A)" class="border p-2 mb-2 w-full">
+      <input id="quote-job" type="text" placeholder="Job (e.g., Signal Repair)" class="border p-2 mb-2 w-full">
+      <input id="quote-amount" type="number" placeholder="Amount" class="border p-2 mb-2 w-full">
+      <button id="submit-quote" class="bg-blue-500 text-white p-2 rounded">Submit Quote</button>
+    </div>
+
+    <!-- Job Logging -->
+    <div id="job-form" class="mb-4 hidden">
+      <h2 class="text-xl font-semibold">Log Job</h2>
+      <input id="job-location" type="text" placeholder="Location (e.g., Town B)" class="border p-2 mb-2 w-full">
+      <input id="job-details" type="text" placeholder="Details (e.g., Bulb Replaced)" class="border p-2 mb-2 w-full">
+      <input id="job-hours" type="number" placeholder="Hours" class="border p-2 mb-2 w-full">
+      <button id="submit-job" class="bg-blue-500 text-white p-2 rounded">Log Job</button>
+    </div>
+
+    <!-- Chat Section -->
+    <div id="chat" class="mb-4 hidden">
+      <h2 class="text-xl font-semibold">Project Chat</h2>
+      <select id="channel" class="border p-2 mb-2">
+        <option value="signal-design">Signal Design</option>
+        <option value="municipal-bids">Municipal Bids</option>
+        <option value="maintenance">Maintenance</option>
+      </select>
+      <div id="messages" class="border p-2 h-64 overflow-y-auto mb-2"></div>
+      <input id="message-input" type="text" placeholder="Type a message..." class="border p-2 w-full">
+      <button id="send-message" class="bg-blue-500 text-white p-2 rounded">Send</button>
+    </div>
+
+    <!-- Quotes/Jobs List -->
+    <div id="quotes-jobs" class="hidden">
+      <h2 class="text-xl font-semibold">Quotes & Jobs</h2>
+      <ul id="quotes-list" class="mb-4"></ul>
+      <ul id="jobs-list"></ul>
+    </div>
+  </div>
+
+  <script>
+    // Firebase Config (Replace with your Firebase project config)
+    const firebaseConfig = {
+  apiKey: "AIzaSyAJ8bc9XS9iJZ0g6KSj9PmeiV_9NJT2s10",
+  authDomain: "what-you-need-app.firebaseapp.com",
+  projectId: "what-you-need-app",
+  storageBucket: "what-you-need-app.firebasestorage.app",
+  messagingSenderId: "785931426272",
+  appId: "1:785931426272:web:b1f411d92069461aae7385"
+};
+   
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    // DOM Elements
+    const app = document.getElementById('app');
+    const authDiv = document.getElementById('auth');
+    const loginBtn = document.getElementById('login');
+    const signupBtn = document.getElementById('signup');
+    const logoutBtn = document.getElementById('logout');
+    const quoteForm = document.getElementById('quote-form');
+    const jobForm = document.getElementById('job-form');
+    const chatDiv = document.getElementById('chat');
+    const quotesJobsDiv = document.getElementById('quotes-jobs');
+    const channelSelect = document.getElementById('channel');
+    const messagesDiv = document.getElementById('messages');
+    const messageInput = document.getElementById('message-input');
+    const sendMessageBtn = document.getElementById('send-message');
+
+    // Auth Handling
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        authDiv.classList.add('hidden');
+        quoteForm.classList.remove('hidden');
+        jobForm.classList.remove('hidden');
+        chatDiv.classList.remove('hidden');
+        quotesJobsDiv.classList.remove('hidden');
+        logoutBtn.classList.remove('hidden');
+        loadQuotes();
+        loadJobs();
+        loadMessages(channelSelect.value);
+      } else {
+        authDiv.classList.remove('hidden');
+        quoteForm.classList.add('hidden');
+        jobForm.classList.add('hidden');
+        chatDiv.classList.add('hidden');
+        quotesJobsDiv.classList.add('hidden');
+        logoutBtn.classList.add('hidden');
+      }
+    });
+
+    loginBtn.addEventListener('click', () => {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      auth.signInWithEmailAndPassword(email, password).catch(err => alert(err.message));
+    });
+
+    signupBtn.addEventListener('click', () => {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      auth.createUserWithEmailAndPassword(email, password).catch(err => alert(err.message));
+    });
+
+    logoutBtn.addEventListener('click', () => auth.signOut());
+
+    // Quote Handling
+    document.getElementById('submit-quote').addEventListener('click', () => {
+      const client = document.getElementById('quote-client').value;
+      const job = document.getElementById('quote-job').value;
+      const amount = document.getElementById('quote-amount').value;
+      db.collection('quotes').add({
+        client,
+        job,
+        amount: parseFloat(amount),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      }).then(() => {
+        document.getElementById('quote-client').value = '';
+        document.getElementById('quote-job').value = '';
+        document.getElementById('quote-amount').value = '';
+      });
+    });
+
+    function loadQuotes() {
+      db.collection('quotes').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+        const quotesList = document.getElementById('quotes-list');
+        quotesList.innerHTML = '';
+        snapshot.forEach(doc => {
+          const quote = doc.data();
+          const li = document.createElement('li');
+          li.textContent = `${quote.client}: ${quote.job} - $${quote.amount}`;
+          quotesList.appendChild(li);
+        });
+      });
+    }
+
+    // Job Logging
+    document.getElementById('submit-job').addEventListener('click', () => {
+      const location = document.getElementById('job-location').value;
+      const details = document.getElementById('job-details').value;
+      const hours = document.getElementById('job-hours').value;
+      db.collection('jobs').add({
+        location,
+        details,
+        hours: parseFloat(hours),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      }).then(() => {
+        document.getElementById('job-location').value = '';
+        document.getElementById('job-details').value = '';
+        document.getElementById('job-hours').value = '';
+      });
+    });
+
+    function loadJobs() {
+      db.collection('jobs').orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+        const jobsList = document.getElementById('jobs-list');
+        jobsList.innerHTML = '';
+        snapshot.forEach(doc => {
+          const job = doc.data();
+          const li = document.createElement('li');
+          li.textContent = `${job.location}: ${job.details} - ${job.hours} hours`;
+          jobsList.appendChild(li);
+        });
+      });
+    }
+
+    // Chat Handling
+    channelSelect.addEventListener('change', () => loadMessages(channelSelect.value));
+
+    sendMessageBtn.addEventListener('click', () => {
+      const message = messageInput.value;
+      const channel = channelSelect.value;
+      if (message) {
+        db.collection('channels').doc(channel).collection('messages').add({
+          text: message,
+          user: auth.currentUser.email,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(() => messageInput.value = '');
+      }
+    });
+
+    function loadMessages(channel) {
+      messagesDiv.innerHTML = '';
+      db.collection('channels').doc(channel).collection('messages')
+        .orderBy('createdAt', 'asc').onSnapshot(snapshot => {
+          messagesDiv.innerHTML = '';
+          snapshot.forEach(doc => {
+            const msg = doc.data();
+            const p = document.createElement('p');
+            p.textContent = `${msg.user}: ${msg.text}`;
+            messagesDiv.appendChild(p);
+          });
+          messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        });
+    }
+  </script>
+</body>
+</html>
